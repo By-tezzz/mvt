@@ -117,7 +117,7 @@ function renderAlerts(alerts, error) {
   alertsSection.classList.remove('hidden');
   if (error) {
     errorBox.classList.remove('hidden');
-    errorBox.textContent = error;
+    errorBox.textContent = 'An error occurred during the scan. Check the log output above for details.';
   }
   if (!alerts || alerts.length === 0) {
     noAlerts.classList.remove('hidden');

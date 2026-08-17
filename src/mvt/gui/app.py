@@ -158,7 +158,7 @@ def create_app() -> Flask:
             task = start_task(CmdAndroidCheckIntrusionLogs, kwargs, command)
 
         else:
-            return {"error": f"Unknown command: {command}"}, 400
+            return {"error": "Unknown command."}, 400
 
         return redirect(url_for("results", task_id=task.task_id))
 
@@ -194,7 +194,7 @@ def create_app() -> Flask:
                 return {"error": "Task not found"}, 404
             return render_template("index.html", error="Task not found."), 404
         if request.args.get("json"):
-            return {"alerts": task.alerts, "status": task.status, "error": task.error}
+            return {"alerts": task.alerts, "status": task.status, "error": bool(task.error)}
         return render_template("results.html", task=task)
 
     # ------------------------------------------------------------------
@@ -221,8 +221,8 @@ def create_app() -> Flask:
                 ioc_updates = IndicatorsUpdates()
                 ioc_updates.update()
                 yield f"data: {json.dumps({'line': 'IOC download complete.'})}\n\n"
-            except Exception as exc:
-                yield f"data: {json.dumps({'line': f'Error: {exc}'})}\n\n"
+            except Exception:
+                yield f"data: {json.dumps({'line': 'Error during IOC download. Check server logs for details.'})}\n\n"
             finally:
                 root.removeHandler(handler)
                 for line in buf.getvalue().splitlines():
