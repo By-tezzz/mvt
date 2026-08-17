@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Android{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto px-6 py-10">
+
+  <h1 class="text-3xl font-bold text-white mb-1">Android Analysis</h1>
+  <p class="text-gray-400 text-sm mb-8">Choose a command and fill in the required paths.</p>
+
+  <!-- Command tabs -->
+  <div class="flex gap-2 mb-6 flex-wrap" id="tabs">
+    {% set cmds = [
+      ('android-check-bugreport',      'Check Bug Report'),
+      ('android-check-backup',         'Check Backup'),
+      ('android-check-androidqf',      'Check AndroidQF'),
+      ('android-check-intrusion-logs', 'Check Intrusion Logs'),
+    ] %}
+    {% for cmd_id, label in cmds %}
+    <button onclick="setCmd('{{ cmd_id }}')"
+            id="tab-{{ cmd_id }}"
+            class="tab-btn px-4 py-1.5 rounded-full text-sm font-medium border transition
+                   border-gray-600 text-gray-300 hover:border-green-400 hover:text-white">
+      {{ label }}
+    </button>
+    {% endfor %}
+  </div>
+
+  <form method="POST" action="/run" id="scan-form" class="space-y-5">
+    <input type="hidden" name="command" id="command-input" value="android-check-bugreport" />
+
+    <!-- Target path -->
+    <div>
+      <label class="block text-sm font-medium text-gray-300 mb-1" id="target-label">
+        Bug report path <span class="text-red-400">*</span>
+      </label>
+      <input type="text" name="target_path" required
+             placeholder="/path/to/bugreport.zip"
+             class="w-full rounded-lg bg-gray-800 border border-gray-600 text-gray-100 px-3 py-2 text-sm
+                    focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" />
+    </div>
+
+    <!-- IOC files -->
+    <div>
+      <label class="block text-sm font-medium text-gray-300 mb-1">
+        IOC files <span class="text-gray-500">(one path per line, optional)</span>
+      </label>
+      <textarea name="iocs" rows="3"
+                placeholder="/path/to/indicators.stix2"
+                class="w-full rounded-lg bg-gray-800 border border-gray-600 text-gray-100 px-3 py-2 text-sm
+                       focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 font-mono"></textarea>
+    </div>
+
+    <!-- Output folder -->
+    <div>
+      <label class="block text-sm font-medium text-gray-300 mb-1">
+        Output folder <span class="text-gray-500">(optional)</span>
+      </label>
+      <input type="text" name="output"
+             placeholder="/path/to/output"
+             class="w-full rounded-lg bg-gray-800 border border-gray-600 text-gray-100 px-3 py-2 text-sm
+                    focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" />
+    </div>
+
+    <!-- Password (backup / androidqf only) -->
+    <div id="password-row" class="hidden">
+      <label class="block text-sm font-medium text-gray-300 mb-1">
+        Backup password <span class="text-gray-500">(optional)</span>
+      </label>
+      <input type="password" name="backup_password"
+             autocomplete="current-password"
+             class="w-full rounded-lg bg-gray-800 border border-gray-600 text-gray-100 px-3 py-2 text-sm
+                    focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" />
+    </div>
+
+    <!-- Timezone (intrusion logs only) -->
+    <div id="timezone-row" class="hidden">
+      <label class="block text-sm font-medium text-gray-300 mb-1">
+        Device timezone <span class="text-gray-500">(e.g. Europe/Paris, optional)</span>
+      </label>
+      <input type="text" name="timezone"
+             placeholder="UTC"
+             class="w-full rounded-lg bg-gray-800 border border-gray-600 text-gray-100 px-3 py-2 text-sm
+                    focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" />
+    </div>
+
+    <!-- Options row -->
+    <div id="hashes-row" class="flex gap-6 flex-wrap">
+      <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer select-none">
+        <input type="checkbox" name="hashes" class="accent-green-500" />
+        Compute hashes
+      </label>
+    </div>
+
+    <button type="submit"
+            class="w-full rounded-lg bg-green-600 hover:bg-green-500 text-white font-semibold py-2.5 transition">
+      Run scan
+    </button>
+  </form>
+
+</div>
+
+<script>
+const targetLabels = {
+  'android-check-bugreport':      'Bug report path (.zip)',
+  'android-check-backup':         'Backup path (.ab)',
+  'android-check-androidqf':      'AndroidQF acquisition path',
+  'android-check-intrusion-logs': 'Intrusion logs path',
+};
+const showPassword = new Set(['android-check-backup', 'android-check-androidqf']);
+const showTimezone = new Set(['android-check-intrusion-logs']);
+const showHashes   = new Set(['android-check-androidqf']);
+
+function setCmd(cmd) {
+  document.getElementById('command-input').value = cmd;
+  document.getElementById('target-label').textContent =
+    (targetLabels[cmd] || 'Path') + ' *';
+  document.getElementById('password-row').classList.toggle('hidden', !showPassword.has(cmd));
+  document.getElementById('timezone-row').classList.toggle('hidden', !showTimezone.has(cmd));
+  document.getElementById('hashes-row').classList.toggle('hidden', !showHashes.has(cmd));
+
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    const active = btn.id === 'tab-' + cmd;
+    btn.classList.toggle('bg-green-600',  active);
+    btn.classList.toggle('text-white',    active);
+    btn.classList.toggle('border-green-600', active);
+    btn.classList.toggle('text-gray-300', !active);
+    btn.classList.toggle('border-gray-600', !active);
+  });
+}
+setCmd('android-check-bugreport');
+</script>
+{% endblock %}
