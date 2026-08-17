@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}Results{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-6 py-10">
+
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold text-white">Scan results</h1>
+    <span id="status-badge"
+          class="text-xs font-semibold px-3 py-1 rounded-full bg-yellow-500 text-gray-900">
+      Running…
+    </span>
+  </div>
+
+  <p class="text-sm text-gray-400 mb-4">
+    Command: <code class="text-gray-200 bg-gray-800 px-1 rounded">{{ task.command }}</code>
+    &nbsp;|&nbsp; Task: <code class="text-gray-200 bg-gray-800 px-1 rounded">{{ task.task_id }}</code>
+  </p>
+
+  <!-- Live log -->
+  <div class="mb-8">
+    <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-2">Log output</h2>
+    <pre id="log-output"
+         class="rounded-lg bg-black text-green-300 text-xs p-4 max-h-96 overflow-y-auto whitespace-pre-wrap min-h-24">
+Waiting for output…</pre>
+  </div>
+
+  <!-- Alerts table (hidden until done) -->
+  <div id="alerts-section" class="hidden">
+    <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-3">Alerts</h2>
+
+    <div id="no-alerts" class="hidden rounded-lg bg-green-900 text-green-200 px-4 py-3 text-sm">
+      ✅ No alerts detected.
+    </div>
+
+    <div id="alerts-table-wrap" class="hidden overflow-x-auto rounded-lg border border-gray-700">
+      <table class="min-w-full text-sm text-left">
+        <thead class="bg-gray-800 text-gray-300 text-xs uppercase tracking-wider">
+          <tr>
+            <th class="px-4 py-3 cursor-pointer select-none" onclick="sortTable(0)">Level ↕</th>
+            <th class="px-4 py-3 cursor-pointer select-none" onclick="sortTable(1)">Module ↕</th>
+            <th class="px-4 py-3">Message</th>
+            <th class="px-4 py-3 cursor-pointer select-none" onclick="sortTable(3)">Time ↕</th>
+          </tr>
+        </thead>
+        <tbody id="alerts-body" class="divide-y divide-gray-800 text-gray-200">
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Error box -->
+  <div id="error-box" class="hidden mt-4 rounded-lg bg-red-900 text-red-200 px-4 py-3 text-sm whitespace-pre-wrap"></div>
+
+  <div class="mt-6">
+    <a href="javascript:history.back()" class="text-sm text-blue-400 hover:underline">← Back</a>
+  </div>
+
+</div>
+
+<script>
+const taskId  = {{ task.task_id | tojson }};
+const logEl   = document.getElementById('log-output');
+const badge   = document.getElementById('status-badge');
+const alertsSection = document.getElementById('alerts-section');
+const noAlerts  = document.getElementById('no-alerts');
+const tableWrap = document.getElementById('alerts-table-wrap');
+const tbody     = document.getElementById('alerts-body');
+const errorBox  = document.getElementById('error-box');
+
+const levelColors = {
+  CRITICAL:      'bg-red-700 text-white',
+  HIGH:          'bg-orange-600 text-white',
+  MEDIUM:        'bg-yellow-500 text-gray-900',
+  LOW:           'bg-yellow-200 text-gray-900',
+  INFORMATIONAL: 'bg-blue-600 text-white',
+};
+
+// ---------- SSE stream ----------
+logEl.textContent = '';
+const es = new EventSource('/stream/' + taskId);
+
+es.onmessage = function(e) {
+  const obj = JSON.parse(e.data);
+  if (obj.line) {
+    logEl.textContent += obj.line + '\n';
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  if (obj.done) {
+    es.close();
+    onDone(obj.status);
+  }
+};
+
+es.onerror = function() {
+  es.close();
+  onDone('error');
+};
+
+// ---------- Fetch alerts after done ----------
+function onDone(status) {
+  if (status === 'done') {
+    badge.textContent = 'Done';
+    badge.className = 'text-xs font-semibold px-3 py-1 rounded-full bg-green-500 text-gray-900';
+  } else {
+    badge.textContent = 'Error';
+    badge.className = 'text-xs font-semibold px-3 py-1 rounded-full bg-red-500 text-white';
+  }
+  // Fetch the rendered results page to extract the alerts JSON injected below.
+  fetch('/results/' + taskId + '?json=1')
+    .then(r => r.json())
+    .then(data => renderAlerts(data.alerts, data.error))
+    .catch(() => renderAlerts([], null));
+}
+
+function renderAlerts(alerts, error) {
+  alertsSection.classList.remove('hidden');
+  if (error) {
+    errorBox.classList.remove('hidden');
+    errorBox.textContent = error;
+  }
+  if (!alerts || alerts.length === 0) {
+    noAlerts.classList.remove('hidden');
+    return;
+  }
+  tableWrap.classList.remove('hidden');
+  tbody.innerHTML = '';
+  alerts.forEach(a => {
+    const tr = document.createElement('tr');
+    tr.className = 'hover:bg-gray-800/50 transition';
+    const color = levelColors[a.level] || 'bg-gray-600 text-white';
+    tr.innerHTML = `
+      <td class="px-4 py-2">
+        <span class="px-2 py-0.5 rounded text-xs font-semibold ${color}">${escHtml(a.level)}</span>
+      </td>
+      <td class="px-4 py-2 font-mono text-xs">${escHtml(a.module)}</td>
+      <td class="px-4 py-2">${escHtml(a.message)}</td>
+      <td class="px-4 py-2 text-gray-400 text-xs whitespace-nowrap">${escHtml(a.event_time)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// ---------- JSON endpoint branch ----------
+// If the page is loaded with ?json=1 we return JSON instead of HTML.
+// This is handled server-side too (see app.py), but we also need the
+// page to actually serve JSON when fetched that way.
+
+// ---------- Sort ----------
+let _sortDir = {};
+function sortTable(col) {
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  const dir = (_sortDir[col] = -(_sortDir[col] || -1));
+  rows.sort((a, b) => {
+    const aT = a.cells[col]?.textContent.trim() || '';
+    const bT = b.cells[col]?.textContent.trim() || '';
+    return aT.localeCompare(bT) * dir;
+  });
+  rows.forEach(r => tbody.appendChild(r));
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+</script>
+{% endblock %}

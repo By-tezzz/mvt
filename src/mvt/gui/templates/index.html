@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-6 py-16 text-center">
+
+  <h1 class="text-4xl font-bold mb-4 text-white">Mobile Verification Toolkit</h1>
+  <p class="text-gray-400 text-lg mb-10">
+    A forensic tool to detect potential compromise on Android and iOS devices.
+    Select a platform to get started.
+  </p>
+
+  {% if error %}
+  <div class="mb-6 rounded bg-red-800 text-red-100 px-4 py-3 text-sm">{{ error }}</div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+
+    <!-- iOS card -->
+    <a href="/ios"
+       class="group rounded-2xl border border-gray-700 bg-gray-900 p-8 hover:border-blue-500 hover:bg-gray-800 transition flex flex-col items-center gap-4">
+      <div class="rounded-full bg-blue-600 group-hover:bg-blue-500 transition p-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+        </svg>
+      </div>
+      <div>
+        <div class="text-xl font-semibold text-white mb-1">iOS</div>
+        <div class="text-sm text-gray-400">Check backups, file-system dumps, sysdiagnose archives, and decrypt encrypted backups.</div>
+      </div>
+    </a>
+
+    <!-- Android card -->
+    <a href="/android"
+       class="group rounded-2xl border border-gray-700 bg-gray-900 p-8 hover:border-green-500 hover:bg-gray-800 transition flex flex-col items-center gap-4">
+      <div class="rounded-full bg-green-600 group-hover:bg-green-500 transition p-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+        </svg>
+      </div>
+      <div>
+        <div class="text-xl font-semibold text-white mb-1">Android</div>
+        <div class="text-sm text-gray-400">Analyse bug reports, backups, AndroidQF acquisitions, and intrusion logs.</div>
+      </div>
+    </a>
+
+  </div>
+
+  <!-- Download IOCs -->
+  <div class="mt-12">
+    <h2 class="text-lg font-semibold text-gray-200 mb-2">Indicators of Compromise</h2>
+    <p class="text-sm text-gray-400 mb-4">Update the local IOC database before running checks.</p>
+    <button id="ioc-btn" onclick="downloadIOCs()"
+            class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 text-sm font-medium transition">
+      Download / Update IOCs
+    </button>
+    <pre id="ioc-log"
+         class="hidden mt-4 rounded-lg bg-black text-green-300 text-xs p-4 text-left max-h-48 overflow-y-auto whitespace-pre-wrap"></pre>
+  </div>
+
+</div>
+
+<script>
+function downloadIOCs() {
+  const btn = document.getElementById('ioc-btn');
+  const log  = document.getElementById('ioc-log');
+  btn.disabled = true;
+  btn.textContent = 'Downloading…';
+  log.classList.remove('hidden');
+  log.textContent = '';
+
+  fetch('/download-iocs', { method: 'POST' }).then(resp => {
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    function pump() {
+      reader.read().then(({ done, value }) => {
+        if (done) { btn.textContent = 'Download / Update IOCs'; btn.disabled = false; return; }
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        lines.forEach(line => {
+          if (!line.startsWith('data:')) return;
+          try {
+            const obj = JSON.parse(line.slice(5).trim());
+            if (obj.line) log.textContent += obj.line + '\n';
+            if (obj.done) { btn.textContent = 'Download / Update IOCs'; btn.disabled = false; }
+          } catch (_) {}
+        });
+        log.scrollTop = log.scrollHeight;
+        pump();
+      });
+    }
+    pump();
+  }).catch(err => { log.textContent += 'Error: ' + err; btn.disabled = false; });
+}
+</script>
+{% endblock %}
